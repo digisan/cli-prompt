@@ -3,6 +3,6 @@
     "_Name": "input name",
     "Port": 1234,
     "_Port": "input port",
-    "IP": "",
+    "IP": "127.0.0.1",
     "_IP": "input IP"
 }
