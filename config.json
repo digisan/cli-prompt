@@ -1,0 +1,8 @@
+{
+    "Name": "CliPromptCfg",
+    "_Name": "input name",
+    "Port": 1234,
+    "_Port": "input port",
+    "IP": "",
+    "_IP": "input IP"
+}
