@@ -4,5 +4,7 @@
     "Port": 1234,
     "_Port": "input port",
     "IP": "127.0.0.1",
-    "_IP": "input IP"
+    "_IP": "input IP",
+    "Bool": true,
+    "_Bool": "input test Bool"
 }

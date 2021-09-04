@@ -3,6 +3,7 @@ package cliprompt
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 	"regexp"
 	"strconv"
 	"strings"
@@ -11,7 +12,7 @@ import (
 	jt "github.com/digisan/json-tool"
 )
 
-func AnalyzeConfig(configPath string) (map[string]interface{}, error) {
+func PromptConfig(configPath string) (map[string]interface{}, error) {
 
 	bytes, err := os.ReadFile(configPath)
 	if err != nil {
@@ -34,16 +35,19 @@ func AnalyzeConfig(configPath string) (map[string]interface{}, error) {
 	// 	fmt.Printf("%v(%T) - %v(%T)\n", k, k, v, v)
 	// }
 
-	fmt.Println(`
+RE_INPUT_ALL:
+	fmt.Printf(`
 --------------------------------------------------------------
-input needed arguments, if default value applies, just <ENTRE>
---------------------------------------------------------------`)
+input arguments for [%s], if default value applies, just <ENTRE>
+--------------------------------------------------------------`, filepath.Base(configPath))
+	fmt.Println()
 
 	for _, f := range prompts {
 
 		var fVal interface{} = m[f]
-		fmt.Printf("\n--> %v, default is [%v]: ", m["_"+f], fVal)
+		fmt.Printf("--> %v, default is [%v]: ", m["_"+f], fVal)
 
+	RE_INPUT:
 		var iVal string
 		n, err := fmt.Scanf("%v", &iVal)
 		if n == 0 {
@@ -54,10 +58,17 @@ input needed arguments, if default value applies, just <ENTRE>
 		}
 
 		switch fVal.(type) {
-		case int, float64:
-			m[f], err = strconv.ParseInt(iVal, 10, 64)
-			if err != nil {
-				m[f], err = strconv.ParseFloat(iVal, 64)
+		case int, int64, float32, float64:
+			if m[f], err = strconv.ParseInt(iVal, 10, 64); err != nil {
+				if m[f], err = strconv.ParseFloat(iVal, 64); err != nil {
+					fmt.Printf("[%v] is invalid, MUST be number, try again\n", iVal)
+					goto RE_INPUT
+				}
+			}
+		case bool:
+			if m[f], err = strconv.ParseBool(iVal); err != nil {
+				fmt.Printf("[%v] is invalid, MUST be bool, try again\n", iVal)
+				goto RE_INPUT
 			}
 		default:
 			m[f] = iVal
@@ -67,10 +78,26 @@ input needed arguments, if default value applies, just <ENTRE>
 		}
 	}
 
-	fmt.Println("----------------")
+	fmt.Println("--------------------------------------------------------------")
 
 	cfg := jt.Composite(m, func(path string) bool { return !strings.HasPrefix(path, "_") })
 	fmt.Println(jt.FmtStr(cfg, "   "))
 
-	return m, nil
+	m, err = jt.Flatten([]byte(cfg))
+	if err != nil {
+		return nil, err
+	}
+
+	fmt.Println("confirm? [Y/n]")
+	confirm := ""
+	_, err = fmt.Scanf("%s", &confirm)
+	if err == nil && ts.In(confirm, "YES", "Y", "yes", "y", "OK", "ok") {
+		return m, nil
+	}
+	if err.Error() == "unexpected newline" && len(confirm) == 0 {
+		return m, nil
+	}
+
+	fmt.Println("INPUT AGAIN PLEASE:")
+	goto RE_INPUT_ALL
 }
