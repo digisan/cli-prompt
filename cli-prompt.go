@@ -2,6 +2,7 @@ package cliprompt
 
 import (
 	"fmt"
+	"log"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -11,6 +12,66 @@ import (
 	"github.com/digisan/gotk/slice/ts"
 	jt "github.com/digisan/json-tool"
 )
+
+type confirmType uint8
+
+const (
+	first confirmType = 1
+	final confirmType = 2
+)
+
+func (ct confirmType) String() string {
+	switch ct {
+	case first:
+		return "default"
+	case final:
+		return "review"
+	default:
+		return "unknown"
+	}
+}
+
+func inputJudge(input string) bool {
+	_, err := fmt.Scanf("%s", &input)
+	switch {
+	case err == nil && ts.In(input, "YES", "Y", "yes", "y", "OK", "ok"):
+		return true
+	case err != nil && err.Error() == "unexpected newline" && len(input) == 0:
+		return true
+	default:
+		return false
+	}
+}
+
+//
+// m: original config map on 'first'
+//    modified config map on 'final'
+//
+func confirm(cfgName string, m map[string]interface{}, ct confirmType) (map[string]interface{}, bool) {
+	fmt.Printf(`
+-----------------------------------------------
+--- %s [%s] arguments ---
+-----------------------------------------------`, ct, cfgName)
+	fmt.Println()
+
+	cfg := jt.Composite(m, func(path string) bool {
+		return !strings.HasPrefix(path, "_") // && unicode.IsUpper(rune(path[0]))
+	})
+	fmt.Println(jt.FmtStr(cfg, "   "))
+
+	// trimmed config map
+	m, err := jt.Flatten([]byte(cfg))
+	if err != nil {
+		log.Fatalf("%v", err)
+	}
+
+	fmt.Println("confirm? [Y/n]")
+	confirmInput := ""
+	if inputJudge(confirmInput) {
+		return m, true
+	}
+	return nil, false
+}
 
 func PromptConfig(configPath string) (map[string]interface{}, error) {
 
@@ -35,17 +96,23 @@ func PromptConfig(configPath string) (map[string]interface{}, error) {
 	// 	fmt.Printf("%v(%T) - %v(%T)\n", k, k, v, v)
 	// }
 
+	config := filepath.Base(configPath)
+	ext := filepath.Ext(config)
+	if mRet, ok := confirm(strings.TrimSuffix(config, ext), m, first); ok {
+		return mRet, nil
+	}
+
 RE_INPUT_ALL:
 	fmt.Printf(`
 --------------------------------------------------------------
-input arguments for [%s], if default value applies, just <ENTRE>
+input arguments for [%s], default value applies? <ENTRE>
 --------------------------------------------------------------`, filepath.Base(configPath))
 	fmt.Println()
 
 	for _, f := range prompts {
 
 		var fVal interface{} = m[f]
-		fmt.Printf("--> %v, default is [%v]: ", m["_"+f], fVal)
+		fmt.Printf("--> %v, value is '%v': ", m["_"+f], fVal)
 
 	RE_INPUT:
 		var iVal string
@@ -78,26 +145,9 @@ input arguments for [%s], if default value applies, just <ENTRE>
 		}
 	}
 
-	fmt.Println("--------------------------------------------------------------")
-
-	cfg := jt.Composite(m, func(path string) bool { return !strings.HasPrefix(path, "_") })
-	fmt.Println(jt.FmtStr(cfg, "   "))
-
-	m, err = jt.Flatten([]byte(cfg))
-	if err != nil {
-		return nil, err
+	if mRet, ok := confirm(filepath.Base(configPath), m, final); ok {
+		return mRet, nil
 	}
-
-	fmt.Println("confirm? [Y/n]")
-	confirm := ""
-	_, err = fmt.Scanf("%s", &confirm)
-	if err == nil && ts.In(confirm, "YES", "Y", "yes", "y", "OK", "ok") {
-		return m, nil
-	}
-	if err.Error() == "unexpected newline" && len(confirm) == 0 {
-		return m, nil
-	}
-
 	fmt.Println("INPUT AGAIN PLEASE:")
 	goto RE_INPUT_ALL
 }

@@ -12,7 +12,13 @@ func main() {
 	if err != nil {
 		log.Fatalln(err)
 	}
+
+	for k, v := range m {
+		fmt.Println(k, v)
+	}
+
 	fmt.Println(m["Bool"])
 	fmt.Println(m["IP"])
-	fmt.Println(m["_IP"])
+	fmt.Println("should be <nil>:", m["_IP"])
+	fmt.Println("should not be <nil>:", m["for_expert"])
 }

@@ -1,10 +1,11 @@
 {
     "Name": "CliPromptCfg",
-    "_Name": "input name",
+    "_Name": "input [Name]",
     "Port": 1234,
-    "_Port": "input port",
+    "_Port": "input [Port]",
     "IP": "127.0.0.1",
-    "_IP": "input IP",
+    "_IP": "input [IP]",
     "Bool": true,
-    "_Bool": "input test Bool"
+    "_Bool": "input [test Bool]",
+    "for_expert": true
 }
