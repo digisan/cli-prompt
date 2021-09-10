@@ -20,5 +20,5 @@ func main() {
 	fmt.Println(m["Bool"])
 	fmt.Println(m["IP"])
 	fmt.Println("should be <nil>:", m["_IP"])
-	fmt.Println("should not be <nil>:", m["for_expert"])
+	fmt.Println("should NOT be <nil>:", m["for_expert"])
 }

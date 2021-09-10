@@ -11,6 +11,7 @@ import (
 
 	"github.com/digisan/gotk/slice/ts"
 	jt "github.com/digisan/json-tool"
+	"github.com/tidwall/sjson"
 )
 
 type confirmType uint8
@@ -31,7 +32,9 @@ func (ct confirmType) String() string {
 	}
 }
 
-func inputJudge(input string) bool {
+func inputJudge(prompt string) bool {
+	fmt.Println(prompt)
+	input := ""
 	_, err := fmt.Scanf("%s", &input)
 	switch {
 	case err == nil && ts.In(input, "YES", "Y", "yes", "y", "OK", "ok"):
@@ -65,9 +68,7 @@ func confirm(cfgName string, m map[string]interface{}, ct confirmType) (map[stri
 		log.Fatalf("%v", err)
 	}
 
-	fmt.Println("confirm? [Y/n]")
-	confirmInput := ""
-	if inputJudge(confirmInput) {
+	if inputJudge("confirm? [Y/n]") {
 		return m, true
 	}
 	return nil, false
@@ -146,6 +147,17 @@ input arguments for [%s], default value applies? <ENTRE>
 	}
 
 	if mRet, ok := confirm(filepath.Base(configPath), m, final); ok {
+		if inputJudge("Overwrite Original File?") {
+			ori := string(bytes)
+			for k, v := range mRet {
+				if ori, err = sjson.Set(ori, k, v); err != nil {
+					return nil, err
+				}
+			}
+			if err := os.WriteFile(configPath, []byte(ori), os.ModePerm); err != nil {
+				log.Fatalln(err)
+			}
+		}
 		return mRet, nil
 	}
 	fmt.Println("INPUT AGAIN PLEASE:")
