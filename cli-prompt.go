@@ -9,7 +9,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/digisan/gotk/slice/ts"
+	"github.com/digisan/go-generics/str"
 	jt "github.com/digisan/json-tool"
 	"github.com/tidwall/sjson"
 )
@@ -37,7 +37,7 @@ func inputJudge(prompt string) bool {
 	input := ""
 	_, err := fmt.Scanf("%s", &input)
 	switch {
-	case err == nil && ts.In(input, "YES", "Y", "yes", "y", "OK", "ok"):
+	case err == nil && str.In(input, "YES", "Y", "yes", "y", "OK", "ok"):
 		return true
 	case err != nil && err.Error() == "unexpected newline" && len(input) == 0:
 		return true
@@ -57,10 +57,14 @@ func confirm(cfgName string, m map[string]interface{}, ct confirmType) (map[stri
 -----------------------------------------------`, ct, cfgName)
 	fmt.Println()
 
-	cfg := jt.Composite(m, func(path string) bool {
-		return !strings.HasPrefix(path, "_") // && unicode.IsUpper(rune(path[0]))
+	cfg := jt.Composite(m, func(path string, value interface{}) (p string, v interface{}, raw bool) {
+		p, v, raw = path, value, false    // if return 'raw' is true, it must be <string> type
+		if strings.HasPrefix(path, "_") { // && unicode.IsUpper(rune(path[0])) {
+			p = ""
+		}
+		return
 	})
-	fmt.Println(jt.FmtStr(cfg, "   "))
+	fmt.Println(jt.FmtStr(cfg, "  "))
 
 	// trimmed config map
 	m, err := jt.Flatten([]byte(cfg))
@@ -83,7 +87,7 @@ func PromptConfig(configPath string) (map[string]interface{}, error) {
 
 	r := regexp.MustCompile(`"_\w+":`)
 	prompts := r.FindAllString(string(bytes), -1)
-	prompts = ts.FM(prompts, nil, func(i int, e string) string { return e[2 : len(e)-2] })
+	prompts = str.FM(prompts, nil, func(i int, e string) string { return e[2 : len(e)-2] })
 
 	m, err := jt.Flatten(bytes)
 	if err != nil {
