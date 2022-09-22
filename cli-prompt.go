@@ -1,16 +1,18 @@
 package cliprompt
 
 import (
+	"bufio"
 	"fmt"
-	"log"
 	"os"
 	"path/filepath"
 	"regexp"
 	"strconv"
 	"strings"
 
-	"github.com/digisan/go-generics/str"
+	. "github.com/digisan/go-generics/v2"
+	"github.com/digisan/gotk/strs"
 	jt "github.com/digisan/json-tool"
+	lk "github.com/digisan/logkit"
 	"github.com/tidwall/sjson"
 )
 
@@ -33,52 +35,49 @@ func (ct confirmType) String() string {
 }
 
 func inputJudge(prompt string) bool {
-	fmt.Println(prompt)
+	fmt.Println(prompt + " [y/N]")
 	input := ""
 	_, err := fmt.Scanf("%s", &input)
 	switch {
-	case err == nil && str.In(input, "YES", "Y", "yes", "y", "OK", "ok"):
+	case err == nil && strs.IsIn(true, true, input, "YES", "Y", "OK", "TRUE"):
 		return true
 	case err != nil && err.Error() == "unexpected newline" && len(input) == 0:
-		return true
+		return false
 	default:
 		return false
 	}
 }
 
-//
 // m: original config map on 'first'
-//    modified config map on 'final'
 //
-func confirm(cfgName string, m map[string]interface{}, ct confirmType) (map[string]interface{}, bool) {
+//	modified config map on 'final'
+func confirm(cfgName string, m map[string]any, ct confirmType) (map[string]any, bool) {
 	fmt.Printf(`
------------------------------------------------
---- %s [%s] arguments ---
------------------------------------------------`, ct, cfgName)
+--------------------------------------------
+    --- %s [%s] values ---        
+--------------------------------------------`, ct, cfgName)
 	fmt.Println()
 
-	cfg := jt.Composite(m, func(path string, value interface{}) (p string, v interface{}, raw bool) {
+	cfg := jt.Composite(m, func(path string, value any) (p string, v any, raw bool) {
 		p, v, raw = path, value, false    // if return 'raw' is true, it must be <string> type
 		if strings.HasPrefix(path, "_") { // && unicode.IsUpper(rune(path[0])) {
 			p = ""
 		}
 		return
 	})
-	fmt.Println(jt.FmtStr(cfg, "  "))
+	fmt.Println(jt.FmtStr(cfg, "    "))
 
 	// trimmed config map
 	m, err := jt.Flatten([]byte(cfg))
-	if err != nil {
-		log.Fatalf("%v", err)
-	}
+	lk.FailOnErr("%v", err)
 
-	if inputJudge("confirm? [Y/n]") {
+	if inputJudge("confirm?") {
 		return m, true
 	}
 	return nil, false
 }
 
-func PromptConfig(configPath string) (map[string]interface{}, error) {
+func PromptConfig(configPath string) (map[string]any, error) {
 
 	bytes, err := os.ReadFile(configPath)
 	if err != nil {
@@ -87,11 +86,16 @@ func PromptConfig(configPath string) (map[string]interface{}, error) {
 
 	r := regexp.MustCompile(`"_\w+":`)
 	prompts := r.FindAllString(string(bytes), -1)
-	prompts = str.FM(prompts, nil, func(i int, e string) string { return e[2 : len(e)-2] })
+	prompts = FilterMap4SglTyp(prompts, nil, func(i int, e string) string { return e[2 : len(e)-2] })
 
 	m, err := jt.Flatten(bytes)
 	if err != nil {
 		return nil, err
+	}
+
+	// if no prompt fields, return config json map
+	if len(prompts) == 0 {
+		return m, nil
 	}
 
 	//
@@ -102,31 +106,36 @@ func PromptConfig(configPath string) (map[string]interface{}, error) {
 	// }
 
 	config := filepath.Base(configPath)
-	ext := filepath.Ext(config)
-	if mRet, ok := confirm(strings.TrimSuffix(config, ext), m, first); ok {
+	if mRet, ok := confirm(config, m, first); ok {
 		return mRet, nil
 	}
 
 RE_INPUT_ALL:
 	fmt.Printf(`
---------------------------------------------------------------
-input arguments for [%s], default value applies? <ENTRE>
---------------------------------------------------------------`, filepath.Base(configPath))
+----------------------------------------------------------------
+input value for [%s]. if <ENTER>, default value applies
+----------------------------------------------------------------`, filepath.Base(configPath))
 	fmt.Println()
 
 	for _, f := range prompts {
 
-		var fVal interface{} = m[f]
-		fmt.Printf("--> %v, value is '%v': ", m["_"+f], fVal)
+		var fVal any = m[f]
+
+		switch fVal.(type) {
+		case int, int64, float32, float64, bool:
+			fmt.Printf("--> %v\t\tvalue is %v\t\tinput its new value: ", m["_"+f], fVal)
+		default:
+			fmt.Printf("--> %v\t\tvalue is '%v'\t\tinput its new value: ", m["_"+f], fVal)
+		}
 
 	RE_INPUT:
 		var iVal string
-		n, err := fmt.Scanf("%v", &iVal)
-		if n == 0 {
-			continue
+		if scanner := bufio.NewScanner(os.Stdin); scanner.Scan() {
+			iVal = scanner.Text()
 		}
-		if err != nil {
-			panic(err)
+
+		if len(iVal) == 0 {
+			continue
 		}
 
 		switch fVal.(type) {
@@ -158,9 +167,7 @@ input arguments for [%s], default value applies? <ENTRE>
 					return nil, err
 				}
 			}
-			if err := os.WriteFile(configPath, []byte(ori), os.ModePerm); err != nil {
-				log.Fatalln(err)
-			}
+			lk.FailOnErr("%v", os.WriteFile(configPath, []byte(ori), os.ModePerm))
 		}
 		return mRet, nil
 	}

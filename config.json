@@ -1,11 +1,8 @@
 {
-    "Name": "CliPromptCfg",
-    "_Name": "input [Name]",
-    "Port": 1234,
-    "_Port": "input [Port]",
-    "IP": "127.0.0.1",
-    "_IP": "input [IP]",
-    "Bool": true,
-    "_Bool": "input [test Bool]",
+    "Name": "sdf ew",    
+    "Port": 2234,    
+    "IP": "127.0.0.1",  
+    "_IP": "remote ip address",  
+    "Bool": true,    
     "for_expert": true
 }
