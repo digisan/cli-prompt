@@ -77,55 +77,61 @@ func confirm(cfgName string, m map[string]any, ct confirmType) (map[string]any, 
 	return nil, false
 }
 
-func PromptConfig(configPath string) (map[string]any, error) {
+func PromptConfig(fPaths ...string) {
 
-	bytes, err := os.ReadFile(configPath)
-	if err != nil {
-		return nil, err
+	var (
+		data []byte
+		err  error
+	)
+
+	for _, fpath := range fPaths {
+		if bytes, err := os.ReadFile(fpath); err == nil {
+			data, fPathCfg = bytes, fpath
+			break
+		}
 	}
+	lk.FailOnErrWhen(err != nil || data == nil, "%v", fmt.Errorf("failed to load configure file"))
 
 	r := regexp.MustCompile(`"_\w+":`)
-	prompts := r.FindAllString(string(bytes), -1)
+	prompts := r.FindAllString(string(data), -1)
 	prompts = FilterMap4SglTyp(prompts, nil, func(i int, e string) string { return e[2 : len(e)-2] })
 
-	m, err := jt.Flatten(bytes)
-	if err != nil {
-		return nil, err
-	}
+	mCfg, err = jt.Flatten(data)
+	lk.FailOnErr("%v", err)
 
 	// if no prompt fields, return config json map
 	if len(prompts) == 0 {
-		return m, nil
+		return
 	}
 
 	//
 	// check config value & type
 	//
-	// for k, v := range m {
+	// for k, v := range mCfg {
 	// 	fmt.Printf("%v(%T) - %v(%T)\n", k, k, v, v)
 	// }
 
-	config := filepath.Base(configPath)
-	if mRet, ok := confirm(config, m, first); ok {
-		return mRet, nil
+	if m, ok := confirm(filepath.Base(fPathCfg), mCfg, first); ok {
+		mCfg = m
+		return
 	}
 
 RE_INPUT_ALL:
 	fmt.Printf(`
 ----------------------------------------------------------------
 input value for [%s]. if <ENTER>, default value applies
-----------------------------------------------------------------`, filepath.Base(configPath))
+----------------------------------------------------------------`, filepath.Base(fPathCfg))
 	fmt.Println()
 
 	for _, f := range prompts {
 
-		var fVal any = m[f]
+		var fVal any = mCfg[f]
 
 		switch fVal.(type) {
 		case int, int64, float32, float64, bool:
-			fmt.Printf("--> %v\t\tvalue is %v\t\tinput its new value: ", m["_"+f], fVal)
+			fmt.Printf("--> %v\t\tvalue is %v\t\tinput its new value: ", mCfg["_"+f], fVal)
 		default:
-			fmt.Printf("--> %v\t\tvalue is '%v'\t\tinput its new value: ", m["_"+f], fVal)
+			fmt.Printf("--> %v\t\tvalue is '%v'\t\tinput its new value: ", mCfg["_"+f], fVal)
 		}
 
 	RE_INPUT:
@@ -140,36 +146,36 @@ input value for [%s]. if <ENTER>, default value applies
 
 		switch fVal.(type) {
 		case int, int64, float32, float64:
-			if m[f], err = strconv.ParseInt(iVal, 10, 64); err != nil {
-				if m[f], err = strconv.ParseFloat(iVal, 64); err != nil {
+			if mCfg[f], err = strconv.ParseInt(iVal, 10, 64); err != nil {
+				if mCfg[f], err = strconv.ParseFloat(iVal, 64); err != nil {
 					fmt.Printf("[%v] is invalid, MUST be number, try again\n", iVal)
 					goto RE_INPUT
 				}
 			}
 		case bool:
-			if m[f], err = strconv.ParseBool(iVal); err != nil {
+			if mCfg[f], err = strconv.ParseBool(iVal); err != nil {
 				fmt.Printf("[%v] is invalid, MUST be bool, try again\n", iVal)
 				goto RE_INPUT
 			}
 		default:
-			m[f] = iVal
+			mCfg[f] = iVal
 		}
 		if err != nil {
 			panic(err)
 		}
 	}
 
-	if mRet, ok := confirm(filepath.Base(configPath), m, final); ok {
+	if m, ok := confirm(filepath.Base(fPathCfg), mCfg, final); ok {
 		if inputJudge("Overwrite Original File?") {
-			ori := string(bytes)
-			for k, v := range mRet {
-				if ori, err = sjson.Set(ori, k, v); err != nil {
-					return nil, err
-				}
+			ori := string(data)
+			for k, v := range m {
+				ori, err = sjson.Set(ori, k, v)
+				lk.FailOnErr("%v", err)
 			}
-			lk.FailOnErr("%v", os.WriteFile(configPath, []byte(ori), os.ModePerm))
+			lk.FailOnErr("%v", os.WriteFile(fPathCfg, []byte(ori), os.ModePerm))
 		}
-		return mRet, nil
+		mCfg = m
+		return
 	}
 	fmt.Println("INPUT AGAIN PLEASE:")
 	goto RE_INPUT_ALL

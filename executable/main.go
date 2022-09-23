@@ -2,27 +2,19 @@ package main
 
 import (
 	"fmt"
-	"log"
 
 	cliprompt "github.com/digisan/cli-prompt"
 )
 
 func main() {
-	m, err := cliprompt.PromptConfig("../config.json")
-	if err != nil {
-		log.Fatalln(err)
-	}
+	cliprompt.PromptConfig("../config.json")
 
-	fmt.Println("")
+	cliprompt.Show()
 
-	for k, v := range m {
-		fmt.Println(k, v)
-	}
+	fmt.Println(cliprompt.Val[string]("IP"))
 
-	fmt.Println("")
+	// fmt.Println(cliprompt.Val[string]("Myname"))
+	// fmt.Println(cliprompt.Val[int]("Port"))
 
-	fmt.Println(m["Bool"])
-	fmt.Println(m["IP"])
-	fmt.Println(`should be <nil> @m["_IP"]:`, m["_IP"])
-	fmt.Println(`should NOT be <nil> @m["for_expert"]:`, m["for_expert"])
+	fmt.Println(cliprompt.ValInt("Port"))
 }
